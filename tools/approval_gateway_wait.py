@@ -112,7 +112,8 @@ def _await_coalesced_leader(session_key: str, leader, payload: dict):
     returns ``None``: single-use consent covers only the leader's execution,
     so the caller must issue a fresh prompt. Hooks fire with ``coalesced=True``
     so observers see the follower's lifecycle without a duplicate prompt."""
-    _ctx._fire_approval_hook("pre_approval_request", **payload, coalesced=True)
+    _ctx._fire_approval_hook("pre_approval_request", **payload, coalesced=True,
+                             request_id=leader.data["request_id"])
     state = _poll_event(leader.event, session_key,
                         interrupt_log="Coalesced approval wait interrupted — "
                                       "returning deny for session %s")
@@ -222,8 +223,10 @@ def _await_gateway_decision(session_key: str, notify_cb, approval_data: dict, *,
 
     from tools.human_input_hooks import human_input_request
     with human_input_request("approval", prompt=payload["command"], session_key=session_key) as human:
-        # Plugins hear about the request before the gateway does (real-time observers).
-        _ctx._fire_approval_hook("pre_approval_request", **payload)
+        # Plugins hear about the request before the gateway does (real-time observers). The
+        # request_id is the same one the gateway notification carries, so an observer can
+        # correlate the request or answer it through ``approval.respond``.
+        _ctx._fire_approval_hook("pre_approval_request", **payload, request_id=entry.data["request_id"])
         # Bridges sync agent thread → async gateway.
         try:
             notify_cb(dict(entry.data))
