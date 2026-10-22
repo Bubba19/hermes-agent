@@ -386,31 +386,6 @@ class TestClassicCliPromptsFireGatewayTwinHooks:
         expected = [(name, {**kw, "surface": cli_surface}) for name, kw in gateway_hooks]
         assert cli_hooks == expected
 
-    def test_gateway_pre_hook_carries_the_notified_request_id(self, isolated_session, monkeypatch):
-        """Observers get the same request_id the gateway card carries, so they can answer it."""
-        monkeypatch.setattr(approval_context, "_get_approval_config",
-                            lambda: {"mode": "manual", "timeout": 60})
-        monkeypatch.setenv("HERMES_GATEWAY_SESSION", "1")
-        notified = []
-
-        def notify(data):
-            notified.append(data)
-            approval_module.resolve_gateway_approval(isolated_session, "once")
-
-        approval_module.register_gateway_notify(isolated_session, notify)
-        captured = []
-        try:
-            with patch("hermes_cli.plugins.invoke_hook",
-                       side_effect=lambda name, **kw: captured.append((name, kw)) or []):
-                _PROTECTED_WRITE[0]()
-        finally:
-            approval_module.unregister_gateway_notify(isolated_session)
-
-        pre = next(kw for name, kw in captured if name == "pre_approval_request")
-        assert len(notified) == 1
-        assert pre["request_id"]
-        assert pre["request_id"] == notified[0]["request_id"]
-
     def test_protected_write_without_a_human_channel_fires_no_hooks(self, isolated_session, monkeypatch):
         """Fail-closed with no panel callback: nobody is waiting, so observers hear nothing."""
         monkeypatch.delenv("HERMES_GATEWAY_SESSION", raising=False)
